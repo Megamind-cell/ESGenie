@@ -1,1 +1,5 @@
 streamlit
+openai
+faiss-cpu
+tiktoken
+numpy
