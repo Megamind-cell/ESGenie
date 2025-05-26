@@ -1,17 +1,15 @@
 # streamlit_app.py
 
 import streamlit as st
-
-st.title("ESGenie")
-st.write(
-    "Let's start building! For help and inspiration, head over to [docs.streamlit.io](https://docs.streamlit.io/)."
-)
-import numpy as np
+import numpy as np 
 import faiss
 import json
 import openai
 import tiktoken
 from collections import defaultdict
+
+# ====== Streamlit Config (MUST be first Streamlit command) ======
+st.set_page_config(page_title="ESG Q&A Bot", layout="wide")
 
 # ====== Configuration ======
 openai.api_key = st.secrets["openai_api_key"]
@@ -23,10 +21,14 @@ MAX_CONTEXT_TOKENS = 6000
 # ====== Load resources ======
 @st.cache_resource
 def load_resources():
-    index = faiss.read_index("4.my_vector_db.index")
-    with open("5.metadata.json", "r", encoding="utf-8") as f:
-        metadata = json.load(f)
-    return index, metadata
+    try:
+        index = faiss.read_index("4.my_vector_db.index")
+        with open("5.metadata.json", "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+        return index, metadata
+    except Exception as e:
+        st.error(f"Error loading resources: {e}")
+        return None, None
 
 # ====== Embedding Function ======
 def get_embedding(text):
@@ -91,16 +93,19 @@ def generate_answer(query, context_chunks):
         st.error(f"OpenAI API error: {e}")
         return None, []
 
-# ====== Streamlit App UI ======
-st.set_page_config(page_title="ESG Q&A Bot", layout="wide")
+# ====== Streamlit UI ======
 st.title("📘 ESG Document Q&A Assistant")
 st.markdown("Ask a question below and get answers backed by internal documents.")
 
 query = st.text_input("🔍 Ask your question:")
 
-if query:
+if query.strip():
     with st.spinner("Processing..."):
         index, metadata = load_resources()
+
+        if index is None or metadata is None:
+            st.stop()
+
         top_chunks = search_chunks(query, index, metadata)
 
         if not top_chunks:
@@ -118,5 +123,10 @@ if query:
                     grouped[meta.get("document", "Unknown")].append(meta.get("page", "?"))
 
                 for doc, pages in grouped.items():
-                    link = next((c["metadata"].get("link", "#") for c in used_chunks if c["metadata"].get("document") == doc), "#")
+                    link = next(
+                        (c["metadata"].get("link", "#")
+                         for c in used_chunks
+                         if c["metadata"].get("document") == doc),
+                        "#"
+                    )
                     st.markdown(f"- [{doc} (pages {', '.join(map(str, sorted(set(pages))))})]({link})")
