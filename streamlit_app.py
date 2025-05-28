@@ -123,7 +123,7 @@ def generate_answer(query, context_chunks):
                 {"role": "system", "content": "You are a concise expert assistant. Respond to the question clearly and compactly. Site the resources in end of response."},
                 {"role": "user", "content": f"{context_text}\n\nQuestion: {query}"}
             ],
-            max_tokens=500
+            max_tokens=700
         )
         return response.choices[0].message.content.strip(), context_chunks
     except Exception as e:
