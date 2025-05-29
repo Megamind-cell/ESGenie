@@ -2,12 +2,11 @@ import streamlit as st
 import numpy as np
 import faiss
 import json
-import openai
-import tiktoken
 import sqlite3
 import pandas as pd
 from PIL import Image
 from collections import defaultdict
+from sentence_transformers import SentenceTransformer
 import os
 
 # ====== Streamlit Config ======
@@ -29,9 +28,7 @@ with col2:
 st.markdown("---")
 
 # ====== Configuration ======
-openai.api_key = st.secrets["openai_api_key"]
-EMBEDDING_MODEL = "text-embedding-3-small"
-CHAT_MODEL = "gpt-4"
+EMBEDDING_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
 TOP_K = 20
 MAX_CONTEXT_TOKENS = 6000
 
@@ -127,8 +124,7 @@ def load_resources():
 # ====== Embedding Function ======
 def get_embedding(text):
     try:
-        response = openai.embeddings.create(input=[text], model=EMBEDDING_MODEL)
-        return np.array(response.data[0].embedding, dtype="float32")
+        return EMBEDDING_MODEL.encode(text).astype("float32")
     except Exception as e:
         st.error(f"Embedding error: {e}")
         return None
@@ -165,34 +161,14 @@ def search_chunks(query_text, index, metadata):
     results.sort(key=lambda x: x["score"])
     return results
 
-# ====== Generate GPT Answer ======
+# ====== Generate Local Answer ======
 def generate_answer(query, context_chunks):
-    encoding = tiktoken.encoding_for_model("gpt-4")
-    total_tokens = 0
-    context_parts = []
-
-    for chunk in context_chunks:
-        chunk_tokens = len(encoding.encode(chunk["text"]))
-        if total_tokens + chunk_tokens > MAX_CONTEXT_TOKENS:
-            break
-        context_parts.append(chunk["text"])
-        total_tokens += chunk_tokens
-
-    context_text = "\n\n".join(context_parts)
-
-    try:
-        response = openai.chat.completions.create(
-            model=CHAT_MODEL,
-            messages=[
-                {"role": "system", "content": "You are a concise expert assistant. Respond to the question clearly and compactly. Site the resources in end of response."},
-                {"role": "user", "content": f"{context_text}\n\nQuestion: {query}"}
-            ],
-            max_tokens=500
-        )
-        return response.choices[0].message.content.strip(), context_chunks
-    except Exception as e:
-        st.error(f"OpenAI API error: {e}")
-        return None, []
+    combined_context = "\n\n".join(chunk["text"] for chunk in context_chunks)
+    # Only use content from provided documents to generate the response
+    if not combined_context.strip():
+        return "I'm sorry, I could not find any information relevant to your query in the provided documents.", context_chunks
+    else:
+        return combined_context[:1000] + "...", context_chunks
 
 # ====== Clear Chat Button ======
 if st.button("🗑️ Clear Conversation History"):
