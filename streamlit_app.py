@@ -5,6 +5,7 @@ import json
 import openai
 import tiktoken
 import sqlite3
+import pandas as pd
 from PIL import Image
 from collections import defaultdict
 import os
@@ -90,6 +91,30 @@ def log_chat_to_db(question, answer, sources):
     ''', (question, answer, sources_json))
     conn.commit()
     conn.close()
+
+# ====== Export Chat Log to Excel ======
+def export_chat_log_to_excel():
+    conn = sqlite3.connect("chat_logs.db")
+    c = conn.cursor()
+    c.execute("SELECT question, answer, sources, timestamp FROM chat_history ORDER BY timestamp DESC")
+    rows = c.fetchall()
+    conn.close()
+
+    data = []
+    for q, a, s, t in rows:
+        sources = ", ".join([
+            f"{src['document']} (page {src['page']})"
+            for src in json.loads(s)
+        ])
+        data.append({
+            "Timestamp": t,
+            "Question": q,
+            "Answer": a,
+            "Sources": sources
+        })
+
+    df = pd.DataFrame(data)
+    df.to_excel("chat_history_log.xlsx", index=False)
 
 # ====== Load resources ======
 @st.cache_resource
@@ -193,6 +218,7 @@ if query.strip():
                     "sources": used_chunks
                 })
                 log_chat_to_db(query, answer, used_chunks)
+                export_chat_log_to_excel()
 
 # ====== Display chat history ======
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
