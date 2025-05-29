@@ -2,11 +2,11 @@ import streamlit as st
 import numpy as np
 import faiss
 import json
+import openai
+import tiktoken
 import sqlite3
-import pandas as pd
 from PIL import Image
 from collections import defaultdict
-from sentence_transformers import SentenceTransformer
 import os
 
 # ====== Streamlit Config ======
@@ -28,7 +28,9 @@ with col2:
 st.markdown("---")
 
 # ====== Configuration ======
-EMBEDDING_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+openai.api_key = st.secrets["openai_api_key"]
+EMBEDDING_MODEL = "text-embedding-3-small"
+CHAT_MODEL = "gpt-4"
 TOP_K = 20
 MAX_CONTEXT_TOKENS = 6000
 
@@ -89,30 +91,6 @@ def log_chat_to_db(question, answer, sources):
     conn.commit()
     conn.close()
 
-# ====== Export Chat Log to Excel ======
-def export_chat_log_to_excel():
-    conn = sqlite3.connect("chat_logs.db")
-    c = conn.cursor()
-    c.execute("SELECT question, answer, sources, timestamp FROM chat_history ORDER BY timestamp DESC")
-    rows = c.fetchall()
-    conn.close()
-
-    data = []
-    for q, a, s, t in rows:
-        sources = ", ".join([
-            f"{src['document']} (page {src['page']})"
-            for src in json.loads(s)
-        ])
-        data.append({
-            "Timestamp": t,
-            "Question": q,
-            "Answer": a,
-            "Sources": sources
-        })
-
-    df = pd.DataFrame(data)
-    df.to_excel("chat_history_log.xlsx", index=False)
-
 # ====== Load resources ======
 @st.cache_resource
 def load_resources():
@@ -124,7 +102,8 @@ def load_resources():
 # ====== Embedding Function ======
 def get_embedding(text):
     try:
-        return EMBEDDING_MODEL.encode(text).astype("float32")
+        response = openai.embeddings.create(input=[text], model=EMBEDDING_MODEL)
+        return np.array(response.data[0].embedding, dtype="float32")
     except Exception as e:
         st.error(f"Embedding error: {e}")
         return None
@@ -161,14 +140,34 @@ def search_chunks(query_text, index, metadata):
     results.sort(key=lambda x: x["score"])
     return results
 
-# ====== Generate Local Answer ======
+# ====== Generate GPT Answer ======
 def generate_answer(query, context_chunks):
-    combined_context = "\n\n".join(chunk["text"] for chunk in context_chunks)
-    # Only use content from provided documents to generate the response
-    if not combined_context.strip():
-        return "I'm sorry, I could not find any information relevant to your query in the provided documents.", context_chunks
-    else:
-        return combined_context[:1000] + "...", context_chunks
+    encoding = tiktoken.encoding_for_model("gpt-4")
+    total_tokens = 0
+    context_parts = []
+
+    for chunk in context_chunks:
+        chunk_tokens = len(encoding.encode(chunk["text"]))
+        if total_tokens + chunk_tokens > MAX_CONTEXT_TOKENS:
+            break
+        context_parts.append(chunk["text"])
+        total_tokens += chunk_tokens
+
+    context_text = "\n\n".join(context_parts)
+
+    try:
+        response = openai.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a concise expert assistant. Respond to the question clearly and compactly. Site the resources in end of response."},
+                {"role": "user", "content": f"{context_text}\n\nQuestion: {query}"}
+            ],
+            max_tokens=500
+        )
+        return response.choices[0].message.content.strip(), context_chunks
+    except Exception as e:
+        st.error(f"OpenAI API error: {e}")
+        return None, []
 
 # ====== Clear Chat Button ======
 if st.button("🗑️ Clear Conversation History"):
@@ -194,7 +193,6 @@ if query.strip():
                     "sources": used_chunks
                 })
                 log_chat_to_db(query, answer, used_chunks)
-                export_chat_log_to_excel()
 
 # ====== Display chat history ======
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
