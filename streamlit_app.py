@@ -4,8 +4,10 @@ import faiss
 import json
 import openai
 import tiktoken
+import sqlite3
 from PIL import Image
 from collections import defaultdict
+import os
 
 # ====== Streamlit Config ======
 st.set_page_config(page_title="ESGenie – Custom RFP Bot", layout="wide")
@@ -52,6 +54,43 @@ DOCUMENT_PRIORITIES = {
     "Diversity and Inclusion FAQ.pdf": 16
 }
 
+# ====== Initialize SQLite DB ======
+def init_db():
+    conn = sqlite3.connect("chat_logs.db")
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question TEXT,
+            answer TEXT,
+            sources TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# ====== Save Chat to DB ======
+def log_chat_to_db(question, answer, sources):
+    source_list = [
+        {
+            "document": chunk["metadata"].get("document", "Unknown"),
+            "page": chunk["metadata"].get("page", "?")
+        } for chunk in sources
+    ]
+    sources_json = json.dumps(source_list)
+
+    conn = sqlite3.connect("chat_logs.db")
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO chat_history (question, answer, sources)
+        VALUES (?, ?, ?)
+    ''', (question, answer, sources_json))
+    conn.commit()
+    conn.close()
+
 # ====== Load resources ======
 @st.cache_resource
 def load_resources():
@@ -89,7 +128,7 @@ def search_chunks(query_text, index, metadata):
         text = texts[i]
         meta = meta_lookup.get(chunk_id, {})
         doc = meta.get("document", "Unknown")
-        priority = DOCUMENT_PRIORITIES.get(doc, 1000)  # Lower = higher priority
+        priority = DOCUMENT_PRIORITIES.get(doc, 1000)
         score = float(D[0][rank])
         adjusted_score = score * (1 + priority / 100)
         results.append({
@@ -123,7 +162,7 @@ def generate_answer(query, context_chunks):
                 {"role": "system", "content": "You are a concise expert assistant. Respond to the question clearly and compactly. Site the resources in end of response."},
                 {"role": "user", "content": f"{context_text}\n\nQuestion: {query}"}
             ],
-            max_tokens=700
+            max_tokens=500
         )
         return response.choices[0].message.content.strip(), context_chunks
     except Exception as e:
@@ -153,6 +192,7 @@ if query.strip():
                     "answer": answer,
                     "sources": used_chunks
                 })
+                log_chat_to_db(query, answer, used_chunks)
 
 # ====== Display chat history ======
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
