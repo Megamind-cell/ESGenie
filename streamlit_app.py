@@ -51,7 +51,7 @@ def get_embedding(text):
 def search_chunks(query_text, index, metadata):
     ids = [item["id"] for item in metadata]
     texts = [item["text"] for item in metadata]
-    meta_lookup = {item["id"]: item["metadata"] for item in metadata]
+    meta_lookup = {item["id"]: item["metadata"] for item in metadata}
     query_vec = get_embedding(query_text)
     if query_vec is None:
         return []
