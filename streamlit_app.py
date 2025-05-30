@@ -36,19 +36,25 @@ st.markdown("")
 
 # ====== Suggestion Buttons ======
 st.markdown("### 💡 Try a prompt:")
-col1, col2, col3 = st.columns(3)
+
+col1, col2, col3,col4, col5 = st.columns([1, 1, 1, 1, 1])  # Equal width, minimal spacing
 
 with col1:
-    if st.button("What are Bain's sustainability commitments?"):
-        st.session_state.query = "What are Bain's sustainability commitments?"
+    st.button("What are Bain's sustainability commitments?", key="prompt1")
 
 with col2:
-    if st.button("Provide details on Bain's waste diversion efforts."):
-        st.session_state.query = "Provide details on Bain's waste diversion efforts."
+    st.button("What are the Bain's waste diversion efforts?", key="prompt2")
 
 with col3:
-    if st.button("What are Bain's ISO certifications, if any?"):
-        st.session_state.query = "What are Bain's ISO certifications, if any?"
+    st.button("What are the Bain's ISO certifications, if any?", key="prompt3")
+
+# Handle button behavior outside to avoid space/logic issues
+if st.session_state.get("prompt1"):
+    st.session_state.query = "What are Bain's sustainability commitments?"
+elif st.session_state.get("prompt2"):
+    st.session_state.query = "What are Bain's waste diversion policy?"
+elif st.session_state.get("prompt3"):
+    st.session_state.query = "What are Bain's ISO certifications, if any?"
 
 
 # ====== Configuration ======
