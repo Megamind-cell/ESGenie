@@ -25,15 +25,31 @@ if "chat_history" not in st.session_state:
 if "query" not in st.session_state:
     st.session_state.query = ""
 
-# ====== Branding ======
-logo = Image.open("logo.png")
-col1, col2 = st.columns([1, 6])
+# ====== Hero Section ======
+st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+st.image("logo.png", width=120)
+st.markdown("<h1 style='margin-bottom: 0;'>ESGenie</h1>", unsafe_allow_html=True)
+st.markdown("<p style='font-size: 16px;'>Generate ESG-related RFP responses with citations and document links</p>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("")
+
+# ====== Suggestion Buttons ======
+st.markdown("### 💡 Try a prompt:")
+col1, col2, col3 = st.columns(3)
+
 with col1:
-    st.image(logo, width=200)
+    if st.button("What are Bain's sustainability commitments?"):
+        st.session_state.query = "What are Bain's sustainability commitments?"
+
 with col2:
-    st.markdown("## **ESGenie**")
-    st.markdown("Custom RFP & ESG Document Q&A Assistant")
-st.markdown("---")
+    if st.button("Provide details on Bain's waste diversion efforts."):
+        st.session_state.query = "Provide details on Bain's waste diversion efforts."
+
+with col3:
+    if st.button("What are Bain's ISO certifications, if any?"):
+        st.session_state.query = "What are Bain's ISO certifications, if any?"
+
 
 # ====== Configuration ======
 openai.api_key = st.secrets["openai_api_key"]
