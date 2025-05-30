@@ -29,11 +29,13 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 CHAT_MODEL = "gpt-4"
 TOP_K = 20
 MAX_CONTEXT_TOKENS = 6000
-BASE_DOC_URL = "https://yourdomain.com/docs/"  # Update this with your document URL base
+BASE_DOC_URL = "https://yourdomain.com/docs/"  # Update to actual URL location
 
-# ====== Initialize clean chat session ======
+# ====== Init Session State ======
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "pending_question" not in st.session_state:
+    st.session_state.pending_question = None
 
 # ====== Document Priority ======
 DOCUMENT_PRIORITIES = {
@@ -124,7 +126,7 @@ def search_chunks(query_text, index, metadata):
     results.sort(key=lambda x: x["score"])
     return results
 
-# ====== GPT Answer Generator (Flexible) ======
+# ====== GPT Answer Generator ======
 def generate_answer(query, context_chunks):
     encoding = tiktoken.encoding_for_model("gpt-4")
     total_tokens = 0
@@ -165,26 +167,32 @@ def generate_answer(query, context_chunks):
 if st.button("🗑️ Clear Conversation History"):
     st.session_state.chat_history = []
 
-# ====== User Query Input ======
+# ====== Input Box ======
 query = st.text_input("🔍 Ask your question:")
 
-if query.strip():
+# ====== Process User Input (Staged Workflow) ======
+if query and st.session_state.pending_question != query:
+    st.session_state.pending_question = query
+    st.rerun()
+
+if st.session_state.pending_question:
     with st.spinner("Processing..."):
         index, metadata = load_resources()
-        top_chunks = search_chunks(query, index, metadata)
+        top_chunks = search_chunks(st.session_state.pending_question, index, metadata)
 
         if not top_chunks:
             st.warning("No relevant results found.")
         else:
-            answer, used_chunks = generate_answer(query, top_chunks)
-
+            answer, used_chunks = generate_answer(st.session_state.pending_question, top_chunks)
             if answer:
                 st.session_state.chat_history.append({
-                    "question": query,
+                    "question": st.session_state.pending_question,
                     "answer": answer,
                     "sources": used_chunks
                 })
-                log_chat_to_excel(query, answer, used_chunks)
+                log_chat_to_excel(st.session_state.pending_question, answer, used_chunks)
+    st.session_state.pending_question = None
+    st.rerun()
 
 # ====== Display Chat History ======
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
