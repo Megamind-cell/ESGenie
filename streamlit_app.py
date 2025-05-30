@@ -7,6 +7,8 @@ import tiktoken
 import sqlite3
 from PIL import Image
 from collections import defaultdict
+import pandas as pd
+import io
 import os
 
 # ====== Streamlit Config ======
@@ -72,7 +74,7 @@ def init_db():
 
 init_db()
 
-# ====== Save Chat to DB ======
+# ====== Save Chat to DB and Export to Excel/JSON ======
 def log_chat_to_db(question, answer, sources):
     source_list = [
         {
@@ -82,6 +84,7 @@ def log_chat_to_db(question, answer, sources):
     ]
     sources_json = json.dumps(source_list)
 
+    # Save to DB
     conn = sqlite3.connect("chat_logs.db")
     c = conn.cursor()
     c.execute('''
@@ -89,7 +92,32 @@ def log_chat_to_db(question, answer, sources):
         VALUES (?, ?, ?)
     ''', (question, answer, sources_json))
     conn.commit()
+
+    # Fetch and export full chat log
+    c.execute("SELECT question, answer, sources, timestamp FROM chat_history ORDER BY timestamp DESC")
+    rows = c.fetchall()
     conn.close()
+
+    data = []
+    for q, a, s, t in rows:
+        try:
+            parsed_sources = json.loads(s)
+            sources_str = ", ".join([f"{src['document']} (page {src['page']})" for src in parsed_sources])
+        except Exception:
+            parsed_sources = []
+            sources_str = s
+        data.append({
+            "Timestamp": t,
+            "Question": q,
+            "Answer": a,
+            "Sources": sources_str,
+            "Sources_raw": parsed_sources
+        })
+
+    df = pd.DataFrame(data)
+    df[["Timestamp", "Question", "Answer", "Sources"]].to_excel("chat_history_log.xlsx", index=False)
+    with open("chat_history_log.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 # ====== Load resources ======
 @st.cache_resource
@@ -211,11 +239,7 @@ for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
         grouped[doc].append(page)
 
     for doc, pages in grouped.items():
-        link = next(
-            (c["metadata"].get("link", "#")
-             for c in chat["sources"] if c["metadata"].get("document") == doc),
-            "#"
-        )
+        link = next((c["metadata"].get("link", "#") for c in chat["sources"] if c["metadata"].get("document") == doc), "#")
         st.markdown(f"- [{doc} (pages {', '.join(map(str, sorted(set(pages))))})]({link})")
 
     st.markdown("---")
