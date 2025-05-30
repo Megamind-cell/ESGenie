@@ -1,4 +1,4 @@
-import streamlit as st  
+import streamlit as st
 import numpy as np
 import faiss
 import json
@@ -8,10 +8,22 @@ import pandas as pd
 from PIL import Image
 from collections import defaultdict
 import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 import re
 
 # ====== Streamlit Config ======
 st.set_page_config(page_title="ESGenie – Custom RFP Bot", layout="wide")
+
+# ====== Constants ======
+BASE_DOC_URL = "https://yourdomain.com/docs/"  # Update to your hosting location
+SHEET_NAME = "ESGenieChatLogs"
+
+# ====== Session State ======
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "query" not in st.session_state:
+    st.session_state.query = ""
 
 # ====== Branding ======
 logo = Image.open("logo.png")
@@ -29,13 +41,8 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 CHAT_MODEL = "gpt-4"
 TOP_K = 20
 MAX_CONTEXT_TOKENS = 6000
-BASE_DOC_URL = "https://yourdomain.com/docs/"  # Update this with your document URL base
 
-# ====== Initialize clean chat session ======
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
-# ====== Document Priority ======
+# ====== Document Priorities ======
 DOCUMENT_PRIORITIES = {
     "GRI report 2023.pdf": 1,
     "Environmental-policy.pdf": 2,
@@ -55,27 +62,32 @@ DOCUMENT_PRIORITIES = {
     "Diversity and Inclusion FAQ.pdf": 16
 }
 
-# ====== Chat Logger ======
-def log_chat_to_excel(question, answer, sources):
-    file_path = "chat_history_log.xlsx"
-    sources_text = ", ".join([
-        f"{chunk['metadata'].get('document', 'Unknown')} (page {chunk['metadata'].get('page', '?')})"
-        for chunk in sources
-    ])
-    new_entry = {
-        "Timestamp": pd.Timestamp.now().isoformat(),
-        "Question": question,
-        "Answer": answer,
-        "Sources": sources_text
-    }
-    if os.path.exists(file_path):
-        df_existing = pd.read_excel(file_path)
-        df_updated = pd.concat([df_existing, pd.DataFrame([new_entry])], ignore_index=True)
-    else:
-        df_updated = pd.DataFrame([new_entry])
-    df_updated.to_excel(file_path, index=False)
+# ====== Google Sheets Logger ======
+def log_chat_to_gsheet(question, answer, sources):
+    try:
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+        client = gspread.authorize(creds)
+        sheet = client.open(SHEET_NAME).sheet1
 
-# ====== Load Vector DB and Metadata ======
+        sources_text = ", ".join([
+            f"{chunk['metadata'].get('document', 'Unknown')} (page {chunk['metadata'].get('page', '?')})"
+            for chunk in sources
+        ])
+        sheet.append_row([
+            pd.Timestamp.now().isoformat(),
+            question,
+            answer or "No answer generated.",
+            sources_text
+        ])
+    except Exception as e:
+        st.error(f"Logging to Google Sheets failed: {e}")
+
+# ====== Load Vector DB & Metadata ======
 @st.cache_resource
 def load_resources():
     index = faiss.read_index("4.my_vector_db.index")
@@ -92,7 +104,7 @@ def get_embedding(text):
         st.error(f"Embedding error: {e}")
         return None
 
-# ====== Search Chunks ======
+# ====== Chunk Search ======
 def search_chunks(query_text, index, metadata):
     ids = [item["id"] for item in metadata]
     texts = [item["text"] for item in metadata]
@@ -112,34 +124,32 @@ def search_chunks(query_text, index, metadata):
         text = texts[i]
         meta = meta_lookup.get(chunk_id, {})
         doc = meta.get("document", "Unknown")
+        page = meta.get("page", "?")
         priority = DOCUMENT_PRIORITIES.get(doc, 1000)
-        score = float(D[0][rank])
-        adjusted_score = score * (1 + priority / 100)
+        score = float(D[0][rank]) * (1 + priority / 100)
         results.append({
             "text": text,
-            "score": adjusted_score,
+            "score": score,
             "metadata": meta
         })
 
-    results.sort(key=lambda x: x["score"])
-    return results
+    return sorted(results, key=lambda x: x["score"])
 
-# ====== GPT Answer Generator (Flexible) ======
+# ====== GPT Answer Generator with Inline Source Tags ======
 def generate_answer(query, context_chunks):
     encoding = tiktoken.encoding_for_model("gpt-4")
-    total_tokens = 0
     context_parts = []
+    total_tokens = 0
 
     for chunk in context_chunks:
-        meta = chunk["metadata"]
-        doc = meta.get("document", "Unknown")
-        page = meta.get("page", "?")
-        chunk_text = f"{chunk['text']}\n(Source: {doc}, page {page})"
-        chunk_tokens = len(encoding.encode(chunk_text))
-        if total_tokens + chunk_tokens > MAX_CONTEXT_TOKENS:
+        doc = chunk["metadata"].get("document", "Unknown")
+        page = chunk["metadata"].get("page", "?")
+        tagged = f"{chunk['text']}\n(Source: {doc}, page {page})"
+        token_count = len(encoding.encode(tagged))
+        if total_tokens + token_count > MAX_CONTEXT_TOKENS:
             break
-        context_parts.append(chunk_text)
-        total_tokens += chunk_tokens
+        context_parts.append(tagged)
+        total_tokens += token_count
 
     context_text = "\n\n".join(context_parts)
 
@@ -148,8 +158,8 @@ def generate_answer(query, context_chunks):
             model=CHAT_MODEL,
             messages=[
                 {"role": "system", "content": (
-                    "You are a concise expert assistant. Use the internal document context provided to answer the question. "
-                    "Cite relevant documents (with document name and page number) at the end if used."
+                    "You are a concise expert assistant. Answer only using the provided context. "
+                    "Include inline citations like (Source: filename, page X)."
                 )},
                 {"role": "user", "content": f"{context_text}\n\nQuestion: {query}"}
             ],
@@ -157,58 +167,49 @@ def generate_answer(query, context_chunks):
         )
         return response.choices[0].message.content.strip(), context_chunks
     except Exception as e:
-        st.error(f"OpenAI API error: {e}")
+        st.error(f"OpenAI error: {e}")
         return None, []
 
 # ====== Clear Chat Button ======
 if st.button("🗑️ Clear Conversation History"):
     st.session_state.chat_history = []
-    st.session_state.query = ""  # This clears the input field
-
-# ====== User Query Input ======
-if "query" not in st.session_state:
     st.session_state.query = ""
 
+# ====== User Input ======
 query = st.text_input("🔍 Ask your question:", key="query")
 
+# ====== Process Query ======
 if query.strip():
     with st.spinner("Processing..."):
         index, metadata = load_resources()
         top_chunks = search_chunks(query, index, metadata)
+        answer, used_chunks = generate_answer(query, top_chunks) if top_chunks else ("No relevant context found.", [])
+        st.session_state.chat_history.append({
+            "question": query,
+            "answer": answer,
+            "sources": used_chunks
+        })
+        log_chat_to_gsheet(query, answer, used_chunks)
 
-        if not top_chunks:
-            st.warning("No relevant results found.")
-        else:
-            answer, used_chunks = generate_answer(query, top_chunks)
-
-            if answer:
-                st.session_state.chat_history.append({
-                    "question": query,
-                    "answer": answer,
-                    "sources": used_chunks
-                })
-                log_chat_to_excel(query, answer, used_chunks)
-
-# ====== Display Chat History ======
+# ====== Display History ======
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
-    st.markdown(f"### 🧠 Question {len(st.session_state.chat_history)-i+1}")
+    st.markdown(f"### 🧠 Question {len(st.session_state.chat_history) - i + 1}")
     st.markdown(chat["question"])
-
     st.markdown("### 💡 Answer")
-    answer_with_highlight = re.sub(r'\(Source: (.*?), page (\d+)\)', r'📝 **[\1 – p.\2]**', chat["answer"])
-    st.markdown(answer_with_highlight, unsafe_allow_html=True)
+    inline = re.sub(r'\(Source: (.*?), page (\d+)\)', r'📝 [\1 – p.\2]', chat["answer"])
+    st.markdown(inline, unsafe_allow_html=True)
 
     st.markdown("### 📚 Sources")
     grouped = defaultdict(list)
     for chunk in chat["sources"]:
-        meta = chunk.get("metadata", {})
+        meta = chunk["metadata"]
         doc = meta.get("document", "Unknown")
         page = meta.get("page", "?")
         grouped[doc].append(page)
 
     for doc, pages in grouped.items():
+        doc_url = f"{BASE_DOC_URL}{doc.replace(' ', '%20')}"
         page_str = ", ".join(map(str, sorted(set(pages))))
-        url = f"{BASE_DOC_URL}{doc.replace(' ', '%20')}"
-        st.markdown(f"- [{doc} (pages {page_str})]({url})")
+        st.markdown(f"- [**{doc}** (pages {page_str})]({doc_url})")
 
     st.markdown("---")

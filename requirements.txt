@@ -9,3 +9,5 @@ numpy
 langchain
 pillow
 nltk
+gspread
+oauth2client
