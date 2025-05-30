@@ -244,7 +244,7 @@ for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
 
     st.markdown("---")
 
-    if st.button("Force Export"):
+# ====== TEMP: Manual Export Button for Debugging ======
+if st.button("Force Export"):
     log_chat_to_db("Test Question", "Test Answer", [])
     st.success("Test chat exported to Excel and JSON.")
-
