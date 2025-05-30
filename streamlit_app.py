@@ -185,7 +185,7 @@ def generate_answer(query, context_chunks):
                 )},
                 {"role": "user", "content": f"{context_text}\n\nQuestion: {query}"}
             ],
-            max_tokens=500
+            max_tokens=1000
         )
         return response.choices[0].message.content.strip(), context_chunks
     except Exception as e:
