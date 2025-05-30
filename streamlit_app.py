@@ -31,17 +31,9 @@ TOP_K = 20
 MAX_CONTEXT_TOKENS = 6000
 BASE_DOC_URL = "https://yourdomain.com/docs/"  # Update this with your document URL base
 
-# ====== Initialize chat history ======
+# ====== Initialize clean chat session ======
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-    if os.path.exists("chat_history_log.xlsx"):
-        df = pd.read_excel("chat_history_log.xlsx")
-        for _, row in df.iterrows():
-            st.session_state.chat_history.append({
-                "question": row["Question"],
-                "answer": row["Answer"],
-                "sources": []
-            })
 
 # ====== Document Priority ======
 DOCUMENT_PRIORITIES = {
