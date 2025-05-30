@@ -166,7 +166,10 @@ if st.button("🗑️ Clear Conversation History"):
     st.session_state.query = ""  # This clears the input field
 
 # ====== User Query Input ======
-query = st.text_input("🔍 Ask your question:")
+if "query" not in st.session_state:
+    st.session_state.query = ""
+
+query = st.text_input("🔍 Ask your question:", key="query")
 
 if query.strip():
     with st.spinner("Processing..."):
