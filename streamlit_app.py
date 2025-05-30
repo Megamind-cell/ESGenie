@@ -1,14 +1,9 @@
-import streamlit as st  
+import streamlit as st
 import numpy as np
-import faiss
-import json
-import openai
-import tiktoken
 import pandas as pd
+import json, os, faiss, openai, tiktoken, re
 from PIL import Image
 from collections import defaultdict
-import os
-import re
 
 # ====== Streamlit Config ======
 st.set_page_config(page_title="ESGenie – Custom RFP Bot", layout="wide")
@@ -29,15 +24,9 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 CHAT_MODEL = "gpt-4"
 TOP_K = 20
 MAX_CONTEXT_TOKENS = 6000
-BASE_DOC_URL = "https://yourdomain.com/docs/"  # Update to actual URL location
+BASE_DOC_URL = "https://yourdomain.com/docs/"  # Update this URL
 
-# ====== Init Session State ======
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "pending_question" not in st.session_state:
-    st.session_state.pending_question = None
-
-# ====== Document Priority ======
+# ====== Document Priorities ======
 DOCUMENT_PRIORITIES = {
     "GRI report 2023.pdf": 1,
     "Environmental-policy.pdf": 2,
@@ -57,25 +46,10 @@ DOCUMENT_PRIORITIES = {
     "Diversity and Inclusion FAQ.pdf": 16
 }
 
-# ====== Chat Logger ======
-def log_chat_to_excel(question, answer, sources):
-    file_path = "chat_history_log.xlsx"
-    sources_text = ", ".join([
-        f"{chunk['metadata'].get('document', 'Unknown')} (page {chunk['metadata'].get('page', '?')})"
-        for chunk in sources
-    ])
-    new_entry = {
-        "Timestamp": pd.Timestamp.now().isoformat(),
-        "Question": question,
-        "Answer": answer,
-        "Sources": sources_text
-    }
-    if os.path.exists(file_path):
-        df_existing = pd.read_excel(file_path)
-        df_updated = pd.concat([df_existing, pd.DataFrame([new_entry])], ignore_index=True)
-    else:
-        df_updated = pd.DataFrame([new_entry])
-    df_updated.to_excel(file_path, index=False)
+# ====== Session State Init ======
+for key in ["chat_history", "pending_question", "processing_done"]:
+    if key not in st.session_state:
+        st.session_state[key] = [] if key == "chat_history" else None if key == "pending_question" else False
 
 # ====== Load Vector DB and Metadata ======
 @st.cache_resource
@@ -85,7 +59,7 @@ def load_resources():
         metadata = json.load(f)
     return index, metadata
 
-# ====== Embedding Function ======
+# ====== Get Embedding ======
 def get_embedding(text):
     try:
         response = openai.embeddings.create(input=[text], model=EMBEDDING_MODEL)
@@ -94,7 +68,7 @@ def get_embedding(text):
         st.error(f"Embedding error: {e}")
         return None
 
-# ====== Search Chunks ======
+# ====== Chunk Search ======
 def search_chunks(query_text, index, metadata):
     ids = [item["id"] for item in metadata]
     texts = [item["text"] for item in metadata]
@@ -108,34 +82,27 @@ def search_chunks(query_text, index, metadata):
     results = []
 
     for rank, i in enumerate(I[0]):
-        if i == -1:
-            continue
-        chunk_id = ids[i]
-        text = texts[i]
-        meta = meta_lookup.get(chunk_id, {})
-        doc = meta.get("document", "Unknown")
-        priority = DOCUMENT_PRIORITIES.get(doc, 1000)
-        score = float(D[0][rank])
-        adjusted_score = score * (1 + priority / 100)
+        if i == -1: continue
+        doc_meta = meta_lookup.get(ids[i], {})
+        doc_name = doc_meta.get("document", "Unknown")
+        priority = DOCUMENT_PRIORITIES.get(doc_name, 1000)
+        score = float(D[0][rank]) * (1 + priority / 100)
         results.append({
-            "text": text,
-            "score": adjusted_score,
-            "metadata": meta
+            "text": texts[i],
+            "score": score,
+            "metadata": doc_meta
         })
 
-    results.sort(key=lambda x: x["score"])
-    return results
+    return sorted(results, key=lambda x: x["score"])
 
-# ====== GPT Answer Generator ======
+# ====== Answer Generation ======
 def generate_answer(query, context_chunks):
     encoding = tiktoken.encoding_for_model("gpt-4")
-    total_tokens = 0
-    context_parts = []
+    context_parts, total_tokens = [], 0
 
     for chunk in context_chunks:
-        meta = chunk["metadata"]
-        doc = meta.get("document", "Unknown")
-        page = meta.get("page", "?")
+        doc = chunk["metadata"].get("document", "Unknown")
+        page = chunk["metadata"].get("page", "?")
         chunk_text = f"{chunk['text']}\n(Source: {doc}, page {page})"
         chunk_tokens = len(encoding.encode(chunk_text))
         if total_tokens + chunk_tokens > MAX_CONTEXT_TOKENS:
@@ -163,23 +130,42 @@ def generate_answer(query, context_chunks):
         st.error(f"OpenAI API error: {e}")
         return None, []
 
-# ====== Clear Chat Button ======
-if st.button("🗑️ Clear Conversation History"):
-    st.session_state.chat_history = []
+# ====== Excel Logging ======
+def log_chat_to_excel(question, answer, sources):
+    file_path = "chat_history_log.xlsx"
+    sources_text = ", ".join(
+        f"{chunk['metadata'].get('document', 'Unknown')} (page {chunk['metadata'].get('page', '?')})"
+        for chunk in sources
+    )
+    new_entry = {
+        "Timestamp": pd.Timestamp.now().isoformat(),
+        "Question": question,
+        "Answer": answer,
+        "Sources": sources_text
+    }
+    df = pd.DataFrame([new_entry])
+    if os.path.exists(file_path):
+        existing = pd.read_excel(file_path)
+        df = pd.concat([existing, df], ignore_index=True)
+    df.to_excel(file_path, index=False)
 
-# ====== Input Box ======
+# ====== Clear Button ======
+if st.button("🗑️ Clear Conversation History"):
+    for key in ["chat_history", "pending_question", "processing_done"]:
+        st.session_state[key] = [] if key == "chat_history" else None if key == "pending_question" else False
+    st.experimental_rerun()
+
+# ====== Input Field ======
 query = st.text_input("🔍 Ask your question:")
 
-# ====== Process User Input (Staged Workflow) ======
-if query and st.session_state.pending_question != query:
+if query and not st.session_state.processing_done:
     st.session_state.pending_question = query
-    st.rerun()
 
-if st.session_state.pending_question:
+# ====== Process and Respond ======
+if st.session_state.pending_question and not st.session_state.processing_done:
     with st.spinner("Processing..."):
         index, metadata = load_resources()
         top_chunks = search_chunks(st.session_state.pending_question, index, metadata)
-
         if not top_chunks:
             st.warning("No relevant results found.")
         else:
@@ -191,29 +177,34 @@ if st.session_state.pending_question:
                     "sources": used_chunks
                 })
                 log_chat_to_excel(st.session_state.pending_question, answer, used_chunks)
-    st.session_state.pending_question = None
-    st.rerun()
 
-# ====== Display Chat History ======
+    st.session_state.pending_question = None
+    st.session_state.processing_done = True
+    st.experimental_rerun()
+
+# ====== Reset processing flag if input is cleared ======
+if not query:
+    st.session_state.processing_done = False
+
+# ====== Render Chat History ======
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
     st.markdown(f"### 🧠 Question {len(st.session_state.chat_history)-i+1}")
     st.markdown(chat["question"])
 
     st.markdown("### 💡 Answer")
-    answer_with_highlight = re.sub(r'\(Source: (.*?), page (\d+)\)', r'📝 **[\1 – p.\2]**', chat["answer"])
-    st.markdown(answer_with_highlight, unsafe_allow_html=True)
+    highlighted = re.sub(r'\(Source: (.*?), page (\d+)\)', r'📝 **[\1 – p.\2]**', chat["answer"])
+    st.markdown(highlighted, unsafe_allow_html=True)
 
     st.markdown("### 📚 Sources")
     grouped = defaultdict(list)
     for chunk in chat["sources"]:
-        meta = chunk.get("metadata", {})
-        doc = meta.get("document", "Unknown")
-        page = meta.get("page", "?")
+        doc = chunk["metadata"].get("document", "Unknown")
+        page = chunk["metadata"].get("page", "?")
         grouped[doc].append(page)
 
     for doc, pages in grouped.items():
-        page_str = ", ".join(map(str, sorted(set(pages))))
+        pages_str = ", ".join(map(str, sorted(set(pages))))
         url = f"{BASE_DOC_URL}{doc.replace(' ', '%20')}"
-        st.markdown(f"- [{doc} (pages {page_str})]({url})")
+        st.markdown(f"- [{doc} (pages {pages_str})]({url})")
 
     st.markdown("---")
