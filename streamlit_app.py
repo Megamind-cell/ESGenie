@@ -27,7 +27,7 @@ if "query" not in st.session_state:
 
 # ====== Hero Section ======
 st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-st.image("logo.png", width=120)
+st.image("logo.png", width=200)
 st.markdown("<h1 style='margin-bottom: 0;'>ESGenie</h1>", unsafe_allow_html=True)
 st.markdown("<p style='font-size: 16px;'>Generate ESG-related RFP responses with citations and document links</p>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
