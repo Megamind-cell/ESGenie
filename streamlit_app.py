@@ -230,8 +230,13 @@ for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
         grouped[doc].append(page)
 
     for doc, pages in grouped.items():
-        doc_url = f"{BASE_DOC_URL}{doc.replace(' ', '%20')}"
+        # ✅ Indented block starts here
+        url = next(
+            (chunk["metadata"].get("link", "#") for chunk in chat["sources"]
+             if chunk["metadata"].get("document") == doc),
+            "#"
+        )
         page_str = ", ".join(map(str, sorted(set(pages))))
-        st.markdown(f"- [**{doc}** (pages {page_str})]({doc_url})")
+        st.markdown(f"- [**{doc}** (pages {page_str})]({url})")
 
     st.markdown("---")
