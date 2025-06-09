@@ -28,7 +28,7 @@ if "query" not in st.session_state:
 # ====== Hero Section ======
 col1, col2 = st.columns([1, 8])
 with col1:
-    st.image("logo.png", width=200)
+    st.image("logo.png", width=400)
 with col2:
     st.markdown("""
         <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
