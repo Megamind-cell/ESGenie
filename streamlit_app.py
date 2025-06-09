@@ -26,35 +26,49 @@ if "query" not in st.session_state:
     st.session_state.query = ""
 
 # ====== Hero Section ======
-st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-st.image("logo.png", width=200)
-st.markdown("<h1 style='margin-bottom: 0;'>ESGenie</h1>", unsafe_allow_html=True)
-st.markdown("<p style='font-size: 16px;'>Generate ESG-related RFP responses with citations and document links</p>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
-
+col1, col2 = st.columns([1, 8])
+with col1:
+    st.image("logo.png", width=200)
+with col2:
+    st.markdown("""
+        <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
+            <h1 style="margin-bottom: 0;">ESGenie</h1>
+            <p style="font-size: 16px; margin-top: 4px;">
+                Generate ESG-related RFP responses with citations and document links
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 st.markdown("")
 
 # ====== Suggestion Buttons ======
-st.markdown("### 💡 Try a prompt:")
+# ====== Suggestion Buttons ======
 
-col1, col2, col3,col4, col5 = st.columns([1, 1, 1, 1, 1])  # Equal width, minimal spacing
+# Create four columns: one for the heading, and three for buttons
+col0, col1, col2, col3, col4, col5 = st.columns([1.5, 3, 3, 3, .5, .5], gap="small")
+
+with col0:
+    st.markdown("#### Try a prompt:")
 
 with col1:
-    st.button("What are Bain's sustainability commitments?", key="prompt1")
+    st.button("What are the Bain sustainability commitments?", key="prompt1")
 
 with col2:
-    st.button("What are the Bain's waste diversion efforts?", key="prompt2")
+    st.button("What are Bain's waste diversion efforts/policy?", key="prompt2")
 
 with col3:
     st.button("What are the Bain's ISO certifications, if any?", key="prompt3")
 
-# Handle button behavior outside to avoid space/logic issues
+# Handle button behavior
 if st.session_state.get("prompt1"):
     st.session_state.query = "What are Bain's sustainability commitments?"
 elif st.session_state.get("prompt2"):
     st.session_state.query = "What are Bain's waste diversion policy?"
 elif st.session_state.get("prompt3"):
     st.session_state.query = "What are Bain's ISO certifications, if any?"
+
+
+# Add vertical space after prompt buttons
+st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
 
 # ====== Configuration ======
@@ -215,13 +229,13 @@ if query.strip():
 
 # ====== Display History ======
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
-    st.markdown(f"### 🧠 Question {len(st.session_state.chat_history) - i + 1}")
+    st.markdown(f"#### Question {len(st.session_state.chat_history) - i + 1}")
     st.markdown(chat["question"])
-    st.markdown("### 💡 Answer")
+    st.markdown("#### Answer")
     inline = re.sub(r'\(Source: (.*?), page (\d+)\)', r'📝 [\1 – p.\2]', chat["answer"])
     st.markdown(inline, unsafe_allow_html=True)
 
-    st.markdown("### 📚 Sources")
+    st.markdown("#### 📚 Sources")
     grouped = defaultdict(list)
     for chunk in chat["sources"]:
         meta = chunk["metadata"]
