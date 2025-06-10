@@ -3,7 +3,7 @@ import numpy as np
 import faiss
 import json
 import openai
-import tiktokengit
+import tiktoken
 import pandas as pd
 from PIL import Image
 from collections import defaultdict
