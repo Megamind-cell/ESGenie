@@ -193,8 +193,9 @@ def generate_answer(query, context_chunks):
             model=CHAT_MODEL,
             messages=[
                 {"role": "system", "content": (
-                    "You are a concise expert assistant. Answer only using the provided context. "
-                    "Include inline citations like (Source: filename, page X)."
+                    "You are an expert assistant. Only answer using the provided context."
+"
+                    "Every claim MUST be followed by an inline citation in the format (Source: filename, page X). Do not skip citations."
                 )},
                 {"role": "user", "content": f"{context_text}\n\nQuestion: {query}"}
             ],
