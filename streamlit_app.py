@@ -41,7 +41,6 @@ with col2:
 st.markdown("")
 
 # ====== Suggestion Buttons ======
-# ====== Suggestion Buttons ======
 
 # Create four columns: one for the heading, and three for buttons
 col0, col1, col2, col3, col4, col5 = st.columns([1.5, 3, 3, 3, .5, .5], gap="small")
@@ -235,7 +234,7 @@ for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
     inline = re.sub(r'\(Source: (.*?), page (\d+)\)', r'📝 [\1 – p.\2]', chat["answer"])
     st.markdown(inline, unsafe_allow_html=True)
 
-    st.markdown("#### 📚 Sources")
+    st.markdown("#### 📚 Additional Sources")
     grouped = defaultdict(list)
     for chunk in chat["sources"]:
         meta = chunk["metadata"]
@@ -243,14 +242,10 @@ for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
         page = meta.get("page", "?")
         grouped[doc].append(page)
 
-    for doc, pages in grouped.items():
-        # ✅ Indented block starts here
+    for doc in grouped.keys():
         url = next(
             (chunk["metadata"].get("link", "#") for chunk in chat["sources"]
-             if chunk["metadata"].get("document") == doc),
+            if chunk["metadata"].get("document") == doc),
             "#"
         )
-        page_str = ", ".join(map(str, sorted(set(pages))))
-        st.markdown(f"- [**{doc}** (pages {page_str})]({url})")
-
-    st.markdown("---")
+        st.markdown(f"- [**{doc}**]({url})")
