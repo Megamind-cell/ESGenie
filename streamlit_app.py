@@ -194,7 +194,6 @@ def generate_answer(query, context_chunks):
             messages=[
                 {"role": "system", "content": (
                     "You are an expert assistant. Only answer using the provided context."
-"
                     "Every claim MUST be followed by an inline citation in the format (Source: filename, page X). Do not skip citations."
                 )},
                 {"role": "user", "content": f"{context_text}\n\nQuestion: {query}"}
