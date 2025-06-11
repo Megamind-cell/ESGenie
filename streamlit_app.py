@@ -11,6 +11,8 @@ import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import re
+from io import BytesIO
+from docx import Document
 
 # ====== Streamlit Config ======
 st.set_page_config(page_title="ESGenie – Custom RFP Bot", layout="wide")
@@ -205,10 +207,43 @@ def generate_answer(query, context_chunks):
         st.error(f"OpenAI error: {e}")
         return None, []
 
-# ====== Clear Chat Button ======
-if st.button("🗑️ Clear Conversation History"):
-    st.session_state.chat_history = []
-    st.session_state.query = ""
+# ====== Export Chat History as Word Document ======
+def generate_docx(chat_history):
+    doc = Document()
+    doc.add_heading("ESGenie Chat Export", level=1)
+
+    for i, chat in enumerate(chat_history, 1):
+        doc.add_heading(f"Question {i}", level=2)
+        doc.add_paragraph(chat['question'])
+        doc.add_heading("Answer", level=3)
+        doc.add_paragraph(chat['answer'])
+        doc.add_paragraph("")  # spacing
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+# ====== Clear & Export Buttons Side-by-Side ======
+col1, col2 = st.columns([1, 4.6])
+
+with col1:
+    if st.button("🗑️ Clear Conversation History"):
+        st.session_state.chat_history = []
+        st.session_state.query = ""
+
+with col2:
+    if st.session_state.chat_history:
+        docx_file = generate_docx(st.session_state.chat_history)
+        st.download_button(
+            label="📥 Export",
+            data=docx_file,
+            file_name="ESGenie_Chat_Export.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key="export_docx"
+        )
+
 
 # ====== User Input ======
 query = st.text_input("🔍 Ask your question:", key="query")
@@ -249,3 +284,6 @@ for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
             "#"
         )
         st.markdown(f"- [**{doc}**]({url})")
+
+
+    

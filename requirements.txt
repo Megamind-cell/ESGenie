@@ -11,3 +11,4 @@ pillow
 nltk
 gspread
 oauth2client
+python-docx
