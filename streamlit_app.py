@@ -13,6 +13,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import re
 from io import BytesIO
 from docx import Document
+from datetime import datetime
 
 # ====== Streamlit Config ======
 st.set_page_config(page_title="ESGenie – Custom RFP Bot", layout="wide")
@@ -26,6 +27,10 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "query" not in st.session_state:
     st.session_state.query = ""
+if "last_submitted_query" not in st.session_state:
+    st.session_state.last_submitted_query = ""
+if "run_query" not in st.session_state:
+    st.session_state.run_query = False
 
 # ====== Hero Section ======
 col1, col2 = st.columns([1, 8])
@@ -43,21 +48,18 @@ with col2:
 st.markdown("")
 
 # ====== Suggestion Buttons ======
-
-# Create four columns: one for the heading, and three for buttons
 col0, col1, col2, col3, col4, col5 = st.columns([1.5, 3, 3, 3, .5, .5], gap="small")
-
 with col0:
     st.markdown("#### Try a prompt:")
-
 with col1:
-    st.button("What are the Bain sustainability commitments?", key="prompt1")
-
+    if st.button("What are the Bain sustainability commitments?", key="prompt1"):
+        st.session_state.query = "What are Bain's sustainability commitments?"
 with col2:
-    st.button("What are Bain's waste diversion efforts/policy?", key="prompt2")
-
+    if st.button("What are Bain's waste diversion efforts/policy?", key="prompt2"):
+        st.session_state.query = "What are Bain's waste diversion policy?"
 with col3:
-    st.button("What are the Bain's ISO certifications, if any?", key="prompt3")
+    if st.button("What are the Bain's ISO certifications, if any?", key="prompt3"):
+        st.session_state.query = "What are Bain's ISO certifications, if any?"
 
 # Handle button behavior
 if st.session_state.get("prompt1"):
@@ -210,14 +212,20 @@ def generate_answer(query, context_chunks):
 # ====== Export Chat History as Word Document ======
 def generate_docx(chat_history):
     doc = Document()
-    doc.add_heading("ESGenie Chat Export", level=1)
 
-    for i, chat in enumerate(chat_history, 1):
-        doc.add_heading(f"Question {i}", level=2)
-        doc.add_paragraph(chat['question'])
-        doc.add_heading("Answer", level=3)
-        doc.add_paragraph(chat['answer'])
-        doc.add_paragraph("")  # spacing
+    # Add title with current date
+    today_str = datetime.now().strftime("%B %d, %Y")  # Example: June 11, 2025
+    doc.add_heading(f"ESGenie Chat Export – {today_str}", level=1)
+
+    if not chat_history:
+        doc.add_paragraph("No chat history available.")
+    else:
+        for i, chat in enumerate(chat_history, 1):
+            doc.add_heading(f"Question {i}", level=2)
+            doc.add_paragraph(chat['question'])
+            doc.add_heading("Answer", level=3)
+            doc.add_paragraph(chat['answer'])
+            doc.add_paragraph("")  # spacing
 
     buffer = BytesIO()
     doc.save(buffer)
@@ -225,31 +233,17 @@ def generate_docx(chat_history):
     return buffer
 
 
-# ====== Clear & Export Buttons Side-by-Side ======
-col1, col2 = st.columns([1, 4.6])
-
-with col1:
-    if st.button("🗑️ Clear Conversation History"):
-        st.session_state.chat_history = []
-        st.session_state.query = ""
-
-with col2:
-    if st.session_state.chat_history:
-        docx_file = generate_docx(st.session_state.chat_history)
-        st.download_button(
-            label="📥 Export",
-            data=docx_file,
-            file_name="ESGenie_Chat_Export.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            key="export_docx"
-        )
 
 
 # ====== User Input ======
-query = st.text_input("🔍 Ask your question:", key="query")
+query = st.text_input("🔍 Ask your question:", value=st.session_state.query, key="query_input")
+if query != st.session_state.query:
+    st.session_state.query = query
+    st.session_state.run_query = True
 
-# ====== Process Query ======
-if query.strip():
+# ====== Trigger Query Processing If New ======
+if query.strip() and (query != st.session_state.get("last_submitted_query", "")):
+    st.session_state.last_submitted_query = query
     with st.spinner("Processing..."):
         index, metadata = load_resources()
         top_chunks = search_chunks(query, index, metadata)
@@ -260,6 +254,25 @@ if query.strip():
             "sources": used_chunks
         })
         log_chat_to_gsheet(query, answer, used_chunks)
+
+# ====== Clear & Export Buttons Side-by-Side ======
+col1, col2 = st.columns([1, 4.6])
+
+with col1:
+    if st.button("🗑️ Clear Conversation History"):
+        st.session_state.chat_history = []
+        st.session_state.query = ""
+        st.session_state.last_submitted_query = ""
+
+with col2:
+    docx_file = generate_docx(st.session_state.chat_history)
+    st.download_button(
+        label="📥 Export",
+        data=docx_file,
+        file_name="ESGenie_Chat_Export.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        key="export_docx"
+    )
 
 # ====== Display History ======
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
