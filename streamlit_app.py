@@ -18,6 +18,39 @@ from datetime import datetime
 # ====== Streamlit Config ======
 st.set_page_config(page_title="ESGenie – Custom RFP Bot", layout="wide")
 
+# ====== Sidebar Instructions ======
+st.sidebar.title("📘 How to Use (TBU)")
+
+st.sidebar.markdown("""
+### Ask a Question  
+Paste an RFP prompt or type a plain-language query.
+
+### Review the Draft  
+Each answer comes with inline citations and live document links—click to open the source.
+
+### Refine & Export  
+Add client-specific nuance, adjust tone, then copy the text into your RFP template.
+""")
+
+st.sidebar.markdown("---")
+
+st.sidebar.markdown("""
+### 💡 Example Questions  
+- “Outline Bain’s net-zero emissions commitment and progress to date.”  
+- “Which ESG policies apply to Bain’s suppliers?”  
+- “Provide diversity metrics for Bain’s global workforce.”
+""")
+
+st.sidebar.markdown("---")
+
+st.sidebar.markdown("""
+### ⚠️ Limitations  
+- Always verify sources—scan the linked documents before sharing with a client.  
+- Knowledge-base scope—answers are limited to materials in the RFP repository.  
+- No predictions—the bot summarizes existing info; it does not forecast future targets.  
+- Confidentiality—**do not paste client-sensitive content** into the chat.
+""")
+
 # ====== Constants ======
 BASE_DOC_URL = "https://yourdomain.com/docs/"  # Update to your hosting location
 SHEET_NAME = "ESGenieChatLogs"
@@ -231,8 +264,6 @@ def generate_docx(chat_history):
     doc.save(buffer)
     buffer.seek(0)
     return buffer
-
-
 
 
 # ====== User Input ======
