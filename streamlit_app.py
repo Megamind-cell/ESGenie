@@ -19,17 +19,17 @@ from datetime import datetime
 st.set_page_config(page_title="ESGenie – Custom RFP Bot", layout="wide")
 
 # ====== Sidebar Instructions ======
-st.sidebar.title("📘 How to Use (TBU)")
+st.sidebar.title("📘 How to Use ESGenie")
 
 st.sidebar.markdown("""
 ### Ask a Question  
 Paste an RFP prompt or type a plain-language query.
 
 ### Review the Draft  
-Each answer comes with inline citations and live document links—click to open the source.
+Each answer comes with inline citations, verbatim excerpts and live document links—click to open the source.
 
 ### Refine & Export  
-Add client-specific nuance, adjust tone, then copy the text into your RFP template.
+Add client-specific nuance, adjust tone, then export/copy the text into your RFP template.
 """)
 
 st.sidebar.markdown("---")
@@ -119,15 +119,15 @@ DOCUMENT_PRIORITIES = {
     "GRI report 2023.pdf": 1,
     "Environmental-policy.pdf": 2,
     "climate-transition-plan-2024.pdf": 3,
-    "Bain DEI report.pdf": 4,
-    "2023_carbon-credit-disclosure.pdf": 5,
-    "bain-wef-and-tcfd-report-2023.pdf": 6,
-    "Bain Overview FAQ.pdf": 7,
-    "Full RFP FAQ Export.pdf": 8,
-    "Client RFP deck.pdf": 9,
-    "Global Safety & Security FAQ.pdf": 10,
-    "bain-sustainable-procurement-policy.pdf": 11,
-    "Professional Standards FAQ.pdf": 12,
+    "Code of Conduct - client version.pdf": 4,
+    "Bain DEI report.pdf": 5,
+    "2023_carbon-credit-disclosure.pdf": 6,
+    "bain-wef-and-tcfd-report-2023.pdf": 7,
+    "Bain Overview FAQ.pdf": 8,
+    "Full RFP FAQ Export.pdf":9,
+    "Client RFP deck.pdf": 10,
+    "Global Safety & Security FAQ.pdf": 11,
+    "bain-sustainable-procurement-policy.pdf": 12,
     "Social Impact.pdf": 13,
     "human-rights-statement-05.2024.pdf": 14,
     "sustainable-procurement-factsheet-v3-05.02.2024.pdf": 15,
@@ -290,7 +290,7 @@ if query.strip() and (query != st.session_state.get("last_submitted_query", ""))
 col1, col2 = st.columns([1, 4.6])
 
 with col1:
-    if st.button("🗑️ Clear Conversation History"):
+    if st.button("🗑️ Clear conversation History"):
         st.session_state.chat_history = []
         st.session_state.query = ""
         st.session_state.last_submitted_query = ""
@@ -309,10 +309,76 @@ with col2:
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
     st.markdown(f"#### Question {len(st.session_state.chat_history) - i + 1}")
     st.markdown(chat["question"])
+
+    # Display generated answer
     st.markdown("#### Answer")
     inline = re.sub(r'\(Source: (.*?), page (\d+)\)', r'📝 [\1 – p.\2]', chat["answer"])
     st.markdown(inline, unsafe_allow_html=True)
 
+    # Show only verbatim chunks that were actually cited, in citation order
+    if chat["sources"]:
+        # Get ordered list of (document, page) from answer text
+        ordered_refs = re.findall(r'\(Source: (.*?), page (\d+)\)', chat["answer"])
+
+        # Build lookup for quick access to matching chunks
+        ref_to_chunk = {
+            (chunk["metadata"].get("document", "Unknown"), str(chunk["metadata"].get("page", "?"))): chunk
+            for chunk in chat["sources"]
+        }
+
+        # Keep only chunks that are actually cited, in citation order (no duplicates)
+        seen = set()
+        ordered_chunks = []
+        for ref in ordered_refs:
+            if ref not in seen and ref in ref_to_chunk:
+                ordered_chunks.append(ref_to_chunk[ref])
+                seen.add(ref)
+
+        if ordered_chunks:
+            with st.expander("📄 Show Verbatim Source Excerpts"):
+                for idx, chunk in enumerate(ordered_chunks, 1):
+                    doc = chunk["metadata"].get("document", "Unknown")
+                    page = chunk["metadata"].get("page", "?")
+                    st.markdown(f"**{idx}. {doc}, page {page}**")
+                   
+                    # Step 1: Normalize and extract bullets
+                    raw_text = chunk["text"]
+
+                    # Normalize whitespace
+                    text = re.sub(r'[ \t]+', ' ', raw_text)
+
+                    # Replace all bullet-like characters (• ● * -) with a consistent marker
+                    # Capture only bullets that are at the start of lines or mid-sentence
+                    text = re.sub(r'(^|\n)[ \t]*[-•●*][ \t]+', r'\1|||BULLET|||', text)
+                    text = re.sub(r'[•●*]', '|||BULLET|||', text)  # Catch inline ones
+
+                    # Split and process bullet parts
+                    parts = text.split('|||BULLET|||')
+                    formatted_parts = []
+
+                    for i, part in enumerate(parts):
+                        part = part.strip()
+                        if not part:
+                            continue
+
+                        # Remove bullets that start with lowercase or conjunctions
+                        if re.match(r'^(and|or|but|so|to)\b', part, flags=re.IGNORECASE):
+                            continue
+                        if not re.match(r'^[A-Z0-9]', part):
+                            continue
+
+                        if i == 0:
+                            formatted_parts.append(part)
+                        else:
+                            formatted_parts.append(f"- {part}")
+
+                    # Join and enforce spacing for Markdown rendering
+                    cleaned_text = "\n\n".join(formatted_parts).strip()
+
+                    # Display clean bullet structure
+                    st.markdown(cleaned_text)
+                    
+    # Display source document links
     st.markdown("#### 📚 Additional Sources")
     grouped = defaultdict(list)
     for chunk in chat["sources"]:
@@ -324,10 +390,7 @@ for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
     for doc in grouped.keys():
         url = next(
             (chunk["metadata"].get("link", "#") for chunk in chat["sources"]
-            if chunk["metadata"].get("document") == doc),
+             if chunk["metadata"].get("document") == doc),
             "#"
         )
         st.markdown(f"- [**{doc}**]({url})")
-
-
-    
