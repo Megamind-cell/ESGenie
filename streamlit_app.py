@@ -266,11 +266,38 @@ def generate_docx(chat_history):
     return buffer
 
 
-# ====== User Input ======
-query = st.text_input("🔍 Ask your question:", value=st.session_state.query, key="query_input")
-if query != st.session_state.query:
+# ====== User Input (Improved Enter Key Logic) ======
+
+# Step 1: Get current input
+query = st.text_input(
+    "🔍 Ask your question:",
+    value=st.session_state.get("query", ""),
+    key="query_input",
+    placeholder="Type your ESG question and press Enter"
+)
+
+# Step 2: If new input detected and it's not a repeat
+if query.strip() and query != st.session_state.get("last_submitted_query", ""):
     st.session_state.query = query
+    st.session_state.last_submitted_query = query
     st.session_state.run_query = True
+
+# Step 3: If new query has been submitted, run it
+if st.session_state.get("run_query", False):
+    with st.spinner("Processing..."):
+        index, metadata = load_resources()
+        top_chunks = search_chunks(query, index, metadata)
+        answer, used_chunks = generate_answer(query, top_chunks) if top_chunks else ("No relevant context found.", [])
+
+        st.session_state.chat_history.append({
+            "question": query,
+            "answer": answer,
+            "sources": used_chunks
+        })
+        log_chat_to_gsheet(query, answer, used_chunks)
+
+    st.session_state.run_query = False  # ✅ Mark query processed
+
 
 # ====== Trigger Query Processing If New ======
 if query.strip() and (query != st.session_state.get("last_submitted_query", "")):
@@ -290,10 +317,9 @@ if query.strip() and (query != st.session_state.get("last_submitted_query", ""))
 col1, col2 = st.columns([1, 4.6])
 
 with col1:
-    if st.button("🗑️ Clear conversation History"):
-        st.session_state.chat_history = []
-        st.session_state.query = ""
-        st.session_state.last_submitted_query = ""
+    if st.button("🗑️ Clear conversation History", key="clear_chat_button"):
+        # Clear all relevant session state
+        st.session_state.clear_trigger = True
 
 with col2:
     docx_file = generate_docx(st.session_state.chat_history)
@@ -304,6 +330,18 @@ with col2:
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         key="export_docx"
     )
+
+# ✅ SAFELY PERFORM CLEARING + RERUN AFTER FIRST RENDER CYCLE
+if st.session_state.get("clear_trigger", False):
+    st.session_state.clear_trigger = False
+    st.session_state.chat_history.clear()
+    st.session_state.query = ""
+    st.session_state.last_submitted_query = ""
+    st.session_state.run_query = False
+
+    # Optional toast confirmation
+    st.success("Conversation history cleared.")
+
 
 # ====== Display History ======
 for i, chat in enumerate(reversed(st.session_state.chat_history), 1):
