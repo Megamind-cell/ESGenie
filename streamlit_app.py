@@ -29,7 +29,7 @@ Paste an RFP prompt or type a plain-language query.
 Each answer comes with inline citations, verbatim excerpts and live document links—click to open the source.
 
 ### Refine & Export  
-Add client-specific nuance, adjust tone, then export/copy the text into your RFP template.
+Copy/export the response into your RFP template, then tailor with client-specific nuance and tone adjustments.
 """)
 
 st.sidebar.markdown("---")
@@ -45,8 +45,8 @@ st.sidebar.markdown("---")
 
 st.sidebar.markdown("""
 ### ⚠️ Limitations  
-- Always verify sources—scan the linked documents before sharing with a client.  
-- Knowledge-base scope—answers are limited to materials in the RFP repository.  
+- Always check asnwer with sources— the linked documents before sharing with a client.  
+- Answers are limited to materials in the RFP repository.  
 - No predictions—the bot summarizes existing info; it does not forecast future targets.  
 - Confidentiality—**do not paste client-sensitive content** into the chat.
 """)
