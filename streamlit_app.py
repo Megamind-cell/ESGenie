@@ -85,13 +85,13 @@ col0, col1, col2, col3, col4, col5 = st.columns([1.5, 3, 3, 3, .5, .5], gap="sma
 with col0:
     st.markdown("#### Try a prompt:")
 with col1:
-    if st.button("What are the Bain sustainability commitments?", key="prompt1"):
+    if st.button("What are Bain sustainability commitments?", key="prompt1"):
         st.session_state.query = "What are Bain's sustainability commitments?"
 with col2:
     if st.button("What are Bain's waste diversion efforts/policy?", key="prompt2"):
         st.session_state.query = "What are Bain's waste diversion policy?"
 with col3:
-    if st.button("What are the Bain's ISO certifications, if any?", key="prompt3"):
+    if st.button("What are Bain's ISO certifications, if any?", key="prompt3"):
         st.session_state.query = "What are Bain's ISO certifications, if any?"
 
 # Handle button behavior
