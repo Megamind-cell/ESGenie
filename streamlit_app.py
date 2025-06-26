@@ -45,7 +45,7 @@ st.sidebar.markdown("---")
 
 st.sidebar.markdown("""
 ### ⚠️ Limitations  
-- Always check asnwer with sources— the linked documents before sharing with a client.  
+- Always check answer with sources— the linked documents before sharing with a client.  
 - Answers are limited to materials in the RFP repository.  
 - No predictions—the bot summarizes existing info; it does not forecast future targets.  
 - Confidentiality—**do not paste client-sensitive content** into the chat.
@@ -81,7 +81,7 @@ with col2:
 st.markdown("")
 
 # ====== Suggestion Buttons ======
-col0, col1, col2, col3, col4, col5 = st.columns([1.5, 3, 3, 3, .5, .5], gap="small")
+col0, col1, col2, col3, col4, col5 = st.columns([1.5, 2.7, 3, 3.2, .3, .5], gap="small")
 with col0:
     st.markdown("#### Try a prompt:")
 with col1:
@@ -102,10 +102,8 @@ elif st.session_state.get("prompt2"):
 elif st.session_state.get("prompt3"):
     st.session_state.query = "What are Bain's ISO certifications, if any?"
 
-
 # Add vertical space after prompt buttons
 st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
-
 
 # ====== Configuration ======
 openai.api_key = st.secrets["openai_api_key"]
