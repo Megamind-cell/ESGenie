@@ -16,10 +16,10 @@ from docx import Document
 from datetime import datetime
 
 # ====== Streamlit Config ======
-st.set_page_config(page_title="ESGenie – Custom RFP Bot", layout="wide")
+st.set_page_config(page_title=" – Custom questionnaire Bot", layout="wide")
 
 # ====== Sidebar Instructions ======
-st.sidebar.title("📘 How to Use ESGenie")
+st.sidebar.title("📘 How to Use")
 
 st.sidebar.markdown("""
 ### Ask a Question  
@@ -274,11 +274,24 @@ query = st.text_input(
     placeholder="Type your ESG question and press Enter"
 )
 
-# Step 2: If new input detected and it's not a repeat
-if query.strip() and query != st.session_state.get("last_submitted_query", ""):
+# Trigger new run only if Enter was used and the query is new
+if query.strip() and query != st.session_state.last_submitted_query:
     st.session_state.query = query
-    st.session_state.last_submitted_query = query
     st.session_state.run_query = True
+
+if st.session_state.run_query:
+    with st.spinner("Processing..."):
+        index, metadata = load_resources()
+        top_chunks = search_chunks(query, index, metadata)
+        answer, used_chunks = generate_answer(query, top_chunks) if top_chunks else ("No relevant context found.", [])
+        st.session_state.chat_history.append({
+            "question": query,
+            "answer": answer,
+            "sources": used_chunks
+        })
+        log_chat_to_gsheet(query, answer, used_chunks)
+    st.session_state.last_submitted_query = query
+    st.session_state.run_query = False  # ✅ Reset trigger
 
 # Step 3: If new query has been submitted, run it
 if st.session_state.get("run_query", False):
