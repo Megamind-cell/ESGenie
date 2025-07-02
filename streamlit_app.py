@@ -264,20 +264,40 @@ def generate_docx(chat_history):
     return buffer
 
 
-# ====== User Input (Improved Enter Key Logic) ======
+# ====== User Input with Perfectly Aligned Submit Button ======
+st.markdown("### 🔍 Ask your question:")
 
-# Step 1: Get current input
-query = st.text_input(
-    "🔍 Ask your question:",
-    value=st.session_state.get("query", ""),
-    key="query_input",
-    placeholder="Type your ESG question and press Enter"
-)
+# Layout: wider input, narrow button
+input_col, button_col = st.columns([8, 1])
 
-# Trigger new run only if Enter was used and the query is new
-if query.strip() and query != st.session_state.last_submitted_query:
+with input_col:
+    query = st.text_area(
+        label="",
+        value=st.session_state.get("query", ""),
+        key="query_input",
+        height=68,
+        placeholder="Type your ESG question here..."
+    )
+
+# Inject vertical alignment fix
+with button_col:
+    st.markdown(
+        """<div style="margin-top: 45px;">""", unsafe_allow_html=True
+    )
+    submit_clicked = st.button("Submit", use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# Trigger processing
+if submit_clicked and query.strip():
     st.session_state.query = query
     st.session_state.run_query = True
+
+
+# Run only on click
+if submit_clicked and query.strip():
+    st.session_state.query = query
+    st.session_state.run_query = True
+
 
 if st.session_state.run_query:
     with st.spinner("Processing..."):
