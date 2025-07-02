@@ -72,9 +72,9 @@ with col1:
 with col2:
     st.markdown("""
         <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
-            <h1 style="margin-bottom: 0;">ESGenie</h1>
+            <h1 style="margin-bottom: 0;">Custom questionnaire Bot</h1>
             <p style="font-size: 16px; margin-top: 4px;">
-                Generate ESG-related RFP responses with citations and document links
+                Generate responses with citations and document links
             </p>
         </div>
     """, unsafe_allow_html=True)
