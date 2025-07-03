@@ -246,7 +246,7 @@ def generate_docx(chat_history):
 
     # Add title with current date
     today_str = datetime.now().strftime("%B %d, %Y")  # Example: June 11, 2025
-    doc.add_heading(f"ESGenie Chat Export – {today_str}", level=1)
+    doc.add_heading(f"Chat Export – {today_str}", level=1)
 
     if not chat_history:
         doc.add_paragraph("No chat history available.")
@@ -357,7 +357,7 @@ with col2:
     st.download_button(
         label="📥 Export",
         data=docx_file,
-        file_name="ESGenie_Chat_Export.docx",
+        file_name="Chat_Export.docx",
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         key="export_docx"
     )
