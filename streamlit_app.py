@@ -16,7 +16,7 @@ from docx import Document
 from datetime import datetime
 
 # ====== Streamlit Config ======
-st.set_page_config(page_title=" – Custom questionnaire Bot", layout="wide")
+st.set_page_config(page_title=" RFP Assistant ", layout="wide")
 
 # ====== Sidebar Instructions ======
 st.sidebar.title("📘 How to Use")
@@ -72,7 +72,7 @@ with col1:
 with col2:
     st.markdown("""
         <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
-            <h1 style="margin-bottom: 0;">Custom questionnaire Bot</h1>
+            <h1 style="margin-bottom: 0;">RFP Assistant</h1>
             <p style="font-size: 16px; margin-top: 4px;">
                 Generate responses with citations and document links
             </p>
