@@ -16,7 +16,7 @@ from docx import Document
 from datetime import datetime
 
 # ====== Streamlit Config ======
-st.set_page_config(page_title=" RFP Assistant ", layout="wide")
+st.set_page_config(page_title="RFP Assistant", layout="wide")
 
 # ====== Sidebar Instructions ======
 st.sidebar.title("📘 How to Use")
